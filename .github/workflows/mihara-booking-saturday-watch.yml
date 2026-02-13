@@ -1,0 +1,68 @@
+name: mihara-booking-saturday-watch
+
+on:
+  schedule:
+    - cron: "*/5 21-23,0-12 * * *"
+  workflow_dispatch:
+
+jobs:
+  check-booking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Fetch booking state
+        id: fetch
+        env:
+          BASE_URL: https://api.wakumy.lyd.inc
+          SLUG: hg10297
+          MEDICAL_DEPARTMENT_ID: 39bebe97-8094-4291-9d5f-70bdff003371
+          BOOKING_MENU_ID: c609658c-74df-463c-849f-b9c06a9ec2fe
+          CHECK_DAYS: 7
+          DATE_TZ: Asia/Tokyo
+          OUTPUT_JSON: 1
+        run: |
+          set -euo pipefail
+          ./fetch_booking_slots.sh > booking_result.json
+
+          has_sat="$(jq -r '.hasSaturdayAvailable' booking_result.json)"
+          {
+            echo "has_saturday=$has_sat"
+            echo "summary<<EOF"
+            jq -r '
+              .days
+              | sort_by(.date)
+              | map(
+                  "・" + .date + " (" + (.wday // "") + ") "
+                  + "空きあり: " + ( .availability.available | (if length == 0 then "なし" else join(", ") end) )
+                  + " / 満席: " + ( .availability.full | (if length == 0 then "なし" else join(", ") end) )
+                )
+              | join("\n")
+            ' booking_result.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send notification to iPhone (email)
+        if: ${{ steps.fetch.outputs.has_saturday == 'true' }}
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ secrets.MAIL_TO }}
+          from: GitHub予約監視 <${{ secrets.MAIL_FROM }}>
+          subject: "[即時通知] みはら耳鼻咽喉科 土曜枠に空きあり"
+          body: |
+            みはら耳鼻咽喉科の「土曜」空き状況を確認しました。
+            監視対象の結果:
+            ${{ steps.fetch.outputs.summary }}
+
+            実行日時: ${{ github.run_started_at }}
+            詳細ログ:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
