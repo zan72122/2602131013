@@ -27,7 +27,7 @@ jobs:
           OUTPUT_JSON: 1
         run: |
           set -euo pipefail
-          ./fetch_booking_slots.sh > booking_result.json
+          bash fetch_booking_slots.sh > booking_result.json
 
           has_sat="$(jq -r '.hasSaturdayAvailable' booking_result.json)"
           {
