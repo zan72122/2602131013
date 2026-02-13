@@ -1,0 +1,27 @@
+name: runner-network-diagnose
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Show runner
+        shell: bash
+        run: |
+          echo "runner_os=${RUNNER_OS}"
+          echo "runner_arch=${RUNNER_ARCH}"
+
+      - name: Probe wakumy API
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://api.wakumy.lyd.inc/dailyBookingTimeFrames/public/hg10297/39bebe97-8094-4291-9d5f-70bdff003371/weeklyTimeFramesList?bookingMenuId=c609658c-74df-463c-849f-b9c06a9ec2fe&from=2026-02-13&to=2026-02-19'
+          CODE="$(curl -sS -o /tmp/body.txt -w '%{http_code}' "$URL" || true)"
+          echo "http_code=${CODE}"
+          head -n 5 /tmp/body.txt || true
