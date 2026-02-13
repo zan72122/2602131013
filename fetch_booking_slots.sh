@@ -74,12 +74,29 @@ fi
 
 API_PATH="${BASE_URL}/dailyBookingTimeFrames/public/${SLUG}/${MEDICAL_DEPARTMENT_ID}/weeklyTimeFramesList"
 URL="${API_PATH}?bookingMenuId=${BOOKING_MENU_ID}&from=${FROM_DATE}&to=${TO_DATE}"
+REFERER="https://wakumy.lyd.inc/clinic/${SLUG}/booking/select-time-slot?medicalDepartmentId=${MEDICAL_DEPARTMENT_ID}&bookingMenuId=${BOOKING_MENU_ID}"
 
 tmp_json="$(mktemp)"
 trap 'rm -f "$tmp_json"' EXIT
 
-http_status="$(curl -sS -w "%{http_code}" -o "$tmp_json" -H 'Accept: application/json' "$URL")"
+http_status="$(curl -sS -w "%{http_code}" -o "$tmp_json" \
+  -H 'Accept: application/json' \
+  -H "User-Agent: curl/8.6.0" \
+  -H "Referer: $REFERER" \
+  "$URL")"
 raw_response="$(cat "$tmp_json")"
+
+if [[ "$http_status" == "403" ]]; then
+  echo "[WARN] first request returned 403, retry with browser-like headers" >&2
+  http_status="$(curl -sS -w "%{http_code}" -o "$tmp_json" \
+    -H 'Accept: application/json' \
+    -H 'Accept-Language: ja,en-US;q=0.9,en;q=0.8' \
+    -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15' \
+    -H 'Referer: https://wakumy.lyd.inc/' \
+    -H 'Origin: https://wakumy.lyd.inc' \
+    "$URL")"
+  raw_response="$(cat "$tmp_json")"
+fi
 
 if [[ "$http_status" != 2* ]]; then
   echo "[ERROR] API request failed (HTTP ${http_status})" >&2
